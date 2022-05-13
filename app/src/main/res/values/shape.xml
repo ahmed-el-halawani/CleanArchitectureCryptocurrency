@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <dimen name="small_shape_corner">4</dimen>
+    <dimen name="medium_shape_corner">4</dimen>
+    <dimen name="large_shape_corner">0</dimen>
+</resources>

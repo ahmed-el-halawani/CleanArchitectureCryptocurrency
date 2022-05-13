@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <color name="onBackGround">@color/TextWhite</color>
+    <color name="onPrimary">@color/DarkGray</color>
+    <color name="background">@color/DarkGray</color>
+</resources>
