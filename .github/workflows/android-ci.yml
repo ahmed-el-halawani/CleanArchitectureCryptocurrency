@@ -1,0 +1,25 @@
+name: Android CI (Release + Live Preview)
+
+on:
+  push:
+    branches: ["main", "master"]
+    # prevent infinite loop when README is updated by the bot
+    paths-ignore:
+      - "README.md"
+
+permissions:
+  contents: write
+
+jobs:
+  build_and_release:
+    uses: ./.github/workflows/_build-release.yml
+    secrets: inherit
+
+  live_preview:
+    needs: build_and_release
+    uses: ./.github/workflows/_live-preview.yml
+    secrets: inherit
+    with:
+      tag_name: ${{ needs.build_and_release.outputs.tag_name }}
+      apk_name: ${{ needs.build_and_release.outputs.apk_name }}
+      version_prefix: "1.0"
