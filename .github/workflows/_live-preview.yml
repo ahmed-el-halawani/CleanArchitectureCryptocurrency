@@ -1,0 +1,89 @@
+name: Live Preview (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      tag_name:
+        required: true
+        type: string
+      apk_name:
+        required: true
+        type: string
+      version_prefix:
+        required: true
+        type: string
+
+jobs:
+  live_preview:
+    runs-on: ubuntu-latest
+
+    # ⚠️ Access Production Secrets (APPETIZE_TOKEN stored in environment secrets)
+    environment: production
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download APK from GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release download "${{ inputs.tag_name }}" --pattern "${{ inputs.apk_name }}"
+          ls -la
+
+          if [ ! -f "${{ inputs.apk_name }}" ]; then
+            echo "APK not found after download: ${{ inputs.apk_name }}"
+            exit 1
+          fi
+
+      - name: Upload to Appetize.io
+        id: upload_appetize
+        env:
+          APPETIZE_TOKEN: ${{ secrets.APPETIZE_TOKEN }}
+        run: |
+          APK_PATH="${{ inputs.apk_name }}"
+
+          echo "Uploading to Appetize: $APK_PATH"
+          RESPONSE=$(curl --location --request POST 'https://api.appetize.io/v1/apps' \
+            --user "$APPETIZE_TOKEN:" \
+            --form "file=@$APK_PATH" \
+            --form "platform=android")
+
+          echo "Response: $RESPONSE"
+
+          PUBLIC_KEY=$(echo "$RESPONSE" | jq -r '.publicKey')
+
+          if [ "$PUBLIC_KEY" = "null" ] || [ -z "$PUBLIC_KEY" ]; then
+            echo "Upload failed."
+            exit 1
+          fi
+
+          echo "public_key=$PUBLIC_KEY" >> $GITHUB_OUTPUT
+          echo "Success! Public Key: $PUBLIC_KEY"
+
+      - name: Update Live Preview Link (README)
+        env:
+          PUBLIC_KEY: ${{ steps.upload_appetize.outputs.public_key }}
+        run: |
+          NEW_LINK="<a href=\"https://appetize.io/embed/$PUBLIC_KEY?autoplay=true&device=pixel4&scale=75&orientation=portrait&osVersion=11.0\"> <img src=\"https://github.com/user-attachments/assets/dcfe3c5d-ff3b-4b53-94d6-3621aa084fab\" width=\"250\" alt=\"App Preview\"> <br> <img alt=\"Run Live Preview\" src=\"https://img.shields.io/badge/%E2%96%B6-Run%20Live%20Preview-000?style=for-the-badge&logo=android\" /> </a>"
+
+          sed -i "/<!-- LIVE_PREVIEW_START -->/,/<!-- LIVE_PREVIEW_END -->/c\\
+          <!-- LIVE_PREVIEW_START -->\\
+          $NEW_LINK\\
+          <!-- LIVE_PREVIEW_END -->" README.md
+
+      - name: Commit and Push README
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+          if git diff --quiet README.md; then
+            echo "No changes to README. Skipping commit."
+          else
+            git add README.md
+            git commit -m "docs: update live preview link [skip ci]"
+            git push
+          fi
